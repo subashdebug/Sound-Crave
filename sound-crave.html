@@ -636,16 +636,18 @@
 
     <!-- dashboard -->
     <div id="whDash" style="display:none;">
-      <div class="why-grid" style="margin-bottom:34px;">
+      <div class="why-grid" style="margin-bottom:34px; grid-template-columns:repeat(4,1fr);">
         <div class="why-card"><b class="num" id="stItems">0</b><h3 style="font-size:14px;">Items in stock</h3></div>
         <div class="why-card"><b class="num" id="stValue">Rs. 0</b><h3 style="font-size:14px;">Stock value</h3></div>
         <div class="why-card"><b class="num" id="stRevenue">Rs. 0</b><h3 style="font-size:14px;">Total billed</h3></div>
+        <div class="why-card"><b class="num" id="stOrders" style="color:var(--signal);">0</b><h3 style="font-size:14px;">New orders</h3></div>
       </div>
 
       <div class="chips" style="margin-bottom:26px;">
         <button class="chip active" data-tab="items">Items</button>
         <button class="chip" data-tab="newbill">New Bill</button>
         <button class="chip" data-tab="bills">Bill History</button>
+        <button class="chip" data-tab="orders">Orders</button>
       </div>
 
       <!-- items tab -->
@@ -654,13 +656,15 @@
           <h3 style="font-size:17px;">Your items</h3>
           <button class="btn btn-primary" id="whAddItemBtn">+ Add item</button>
         </div>
+        <p style="font-size:13px; color:var(--text-muted); margin-top:-6px;">Every item you save here appears live on the Sound Crave shop page — category, price and stock included.</p>
         <div id="whItemForm" style="display:none;" class="card">
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <input id="wiName" class="search-box" style="padding:12px 14px;" placeholder="Item name">
-            <input id="wiCat" class="search-box" style="padding:12px 14px;" placeholder="Category">
+            <input id="wiCat" class="search-box" style="padding:12px 14px;" placeholder="Category (e.g. Earbuds)">
             <input id="wiPrice" type="number" min="0" class="search-box" style="padding:12px 14px;" placeholder="Selling price (PKR)">
             <input id="wiStock" type="number" min="0" class="search-box" style="padding:12px 14px;" placeholder="Stock quantity">
           </div>
+          <textarea id="wiDesc" class="search-box" style="width:100%; padding:12px 14px; margin-top:12px; min-height:64px; resize:vertical; font-family:inherit;" placeholder="Short description shown on the shop page (optional)"></textarea>
           <div class="modal-actions" style="margin-top:16px;">
             <button class="btn btn-primary" id="wiSaveBtn">Save item</button>
             <button class="btn btn-ghost" id="wiCancelBtn">Cancel</button>
@@ -689,7 +693,31 @@
       <div id="tab-bills" style="display:none;">
         <div id="whBillsList" style="display:flex; flex-direction:column; gap:12px;"></div>
       </div>
+
+      <!-- orders tab (from the public shop's checkout) -->
+      <div id="tab-orders" style="display:none;">
+        <p style="font-size:13px; color:var(--text-muted); margin-top:0;">Orders placed by customers on the shop page land here. Fulfilling one creates a bill and reduces stock automatically.</p>
+        <div id="whOrdersList" style="display:flex; flex-direction:column; gap:12px;"></div>
+      </div>
     </div>
+  </div>
+</div>
+
+<div id="productView" style="display:none;">
+  <header class="site">
+    <div class="wrap nav-row">
+      <div class="logo"><span class="dot"></span>Sound Crave</div>
+      <div class="nav-actions">
+        <button class="icon-btn" id="pdCartToggle" aria-label="Open cart">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="9" cy="21" r="1"/><circle cx="18" cy="21" r="1"/></svg>
+          <span class="badge" id="pdCartBadge" style="display:none">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="wrap" style="padding:36px 24px 90px;">
+    <a href="#" style="font-size:13.5px; color:var(--text-muted); text-decoration:none;">&larr; Back to shop</a>
+    <div id="pdBody" style="margin-top:24px;"></div>
   </div>
 </div>
 
@@ -743,22 +771,28 @@ window.firebaseReady = (async function () {
 (function(){
   "use strict";
 
-  /* ---------------- product data ---------------- */
-  var CATS = ["All","Earbuds","Headphones","Speakers","Cables & Chargers","Cases","Accessories"];
-  var PRODUCTS = [
-    {id:1, name:"Pulse Buds Pro", cat:"Earbuds", type:"earbud", price:6499, old:7999, tag:"Bestseller", desc:"True wireless earbuds with active noise cancelling and a 28-hour case battery."},
-    {id:2, name:"AirWave Lite", cat:"Earbuds", type:"earbud", price:3299, tag:null, desc:"Lightweight everyday earbuds with punchy bass and touch controls."},
-    {id:3, name:"Bass Orbit", cat:"Headphones", type:"headphone", price:8999, tag:"New", desc:"Over-ear headphones tuned for deep bass with 40-hour playback."},
-    {id:4, name:"StudioLine X", cat:"Headphones", type:"headphone", price:12999, old:14999, tag:null, desc:"Studio-grade over-ears with foldable design and detachable cable."},
-    {id:5, name:"Roam Mini Speaker", cat:"Speakers", type:"speaker", price:4499, tag:null, desc:"Pocket-sized speaker with 12-hour battery and IPX5 splash resistance."},
-    {id:6, name:"Bass Cube 2", cat:"Speakers", type:"speaker", price:6999, tag:"New", desc:"Compact party speaker with surprisingly loud, room-filling bass."},
-    {id:7, name:"Fast Charge 65W", cat:"Cables & Chargers", type:"charger", price:2399, tag:null, desc:"GaN wall charger that fills most phones to 60% in 30 minutes."},
-    {id:8, name:"Braided USB-C Cable", cat:"Cables & Chargers", type:"cable", price:1199, tag:null, desc:"Nylon-braided cable rated for 10,000+ bend cycles, 1.2m length."},
-    {id:9, name:"MagSnap Wireless Pad", cat:"Cables & Chargers", type:"charger", price:2899, tag:"New", desc:"Magnetic 15W wireless charging pad that snaps into place instantly."},
-    {id:10, name:"Shockcase Armor", cat:"Cases", type:"case", price:1899, tag:null, desc:"Drop-tested case with raised bezels for screen and camera protection."},
-    {id:11, name:"Clear Guard Case", cat:"Cases", type:"case", price:1499, tag:null, desc:"Slim transparent case that won't yellow, with anti-slip grip edges."},
-    {id:12, name:"Grip Strap Holder", cat:"Accessories", type:"strap", price:899, tag:null, desc:"Adjustable finger strap and stand for one-handed scrolling and video calls."}
+  /* ---------------- product data ----------------
+     FALLBACK_PRODUCTS is shown only until your Warehouse has real items in
+     it (or if a device is fully offline with no cached copy). The moment
+     you add an item in the Warehouse, PRODUCTS below is replaced with your
+     real inventory, synced live from the same Firestore project. */
+  var DEMO_CATS = ["All","Earbuds","Headphones","Speakers","Cables & Chargers","Cases","Accessories"];
+  var FALLBACK_PRODUCTS = [
+    {id:"demo1", name:"Pulse Buds Pro", cat:"Earbuds", type:"earbud", price:6499, old:7999, tag:"Bestseller", desc:"True wireless earbuds with active noise cancelling and a 28-hour case battery."},
+    {id:"demo2", name:"AirWave Lite", cat:"Earbuds", type:"earbud", price:3299, tag:null, desc:"Lightweight everyday earbuds with punchy bass and touch controls."},
+    {id:"demo3", name:"Bass Orbit", cat:"Headphones", type:"headphone", price:8999, tag:"New", desc:"Over-ear headphones tuned for deep bass with 40-hour playback."},
+    {id:"demo4", name:"StudioLine X", cat:"Headphones", type:"headphone", price:12999, old:14999, tag:null, desc:"Studio-grade over-ears with foldable design and detachable cable."},
+    {id:"demo5", name:"Roam Mini Speaker", cat:"Speakers", type:"speaker", price:4499, tag:null, desc:"Pocket-sized speaker with 12-hour battery and IPX5 splash resistance."},
+    {id:"demo6", name:"Bass Cube 2", cat:"Speakers", type:"speaker", price:6999, tag:"New", desc:"Compact party speaker with surprisingly loud, room-filling bass."},
+    {id:"demo7", name:"Fast Charge 65W", cat:"Cables & Chargers", type:"charger", price:2399, tag:null, desc:"GaN wall charger that fills most phones to 60% in 30 minutes."},
+    {id:"demo8", name:"Braided USB-C Cable", cat:"Cables & Chargers", type:"cable", price:1199, tag:null, desc:"Nylon-braided cable rated for 10,000+ bend cycles, 1.2m length."},
+    {id:"demo9", name:"MagSnap Wireless Pad", cat:"Cables & Chargers", type:"charger", price:2899, tag:"New", desc:"Magnetic 15W wireless charging pad that snaps into place instantly."},
+    {id:"demo10", name:"Shockcase Armor", cat:"Cases", type:"case", price:1899, tag:null, desc:"Drop-tested case with raised bezels for screen and camera protection."},
+    {id:"demo11", name:"Clear Guard Case", cat:"Cases", type:"case", price:1499, tag:null, desc:"Slim transparent case that won't yellow, with anti-slip grip edges."},
+    {id:"demo12", name:"Grip Strap Holder", cat:"Accessories", type:"strap", price:899, tag:null, desc:"Adjustable finger strap and stand for one-handed scrolling and video calls."}
   ];
+  var PRODUCTS = FALLBACK_PRODUCTS;
+  var catalogHasRealItems = false;
 
   /* ---------------- icons ---------------- */
   function icon(type, color){
@@ -771,9 +805,75 @@ window.firebaseReady = (async function () {
       charger: '<svg '+s+'><rect x="16" y="8" width="32" height="20" rx="4"/><path d="M24 28v8l-4 10h10l-4 10 12-18h-8l4-10z" fill="'+color+'" stroke="none"/></svg>',
       cable: '<svg '+s+'><path d="M10 44c8 8 14 2 18-4s10-12 18-4"/><rect x="6" y="40" width="10" height="10" rx="2"/><rect x="48" y="16" width="10" height="10" rx="2"/></svg>',
       case: '<svg '+s+'><rect x="18" y="6" width="28" height="52" rx="8"/><circle cx="32" cy="16" r="1.6" fill="'+color+'" stroke="none"/><rect x="24" y="40" width="16" height="10" rx="2" opacity=".5"/></svg>',
-      strap: '<svg '+s+'><rect x="14" y="10" width="36" height="44" rx="6"/><path d="M26 54v6a6 6 0 0 0 12 0v-6"/></svg>'
+      strap: '<svg '+s+'><rect x="14" y="10" width="36" height="44" rx="6"/><path d="M26 54v6a6 6 0 0 0 12 0v-6"/></svg>',
+      box: '<svg '+s+'><path d="M8 20l24-10 24 10-24 10z"/><path d="M8 20v24l24 10 24-10V20"/><path d="M32 30v24"/></svg>'
     };
-    return map[type] || map.earbud;
+    return map[type] || map.box;
+  }
+
+  /* guesses which icon fits a warehouse item, based on its category/name text */
+  function guessType(catText, nameText){
+    var t = ((catText || "") + " " + (nameText || "")).toLowerCase();
+    if (t.indexOf("earbud") > -1 || t.indexOf("bud") > -1) return "earbud";
+    if (t.indexOf("headphone") > -1 || t.indexOf("headset") > -1 || t.indexOf("over-ear") > -1) return "headphone";
+    if (t.indexOf("speaker") > -1) return "speaker";
+    if (t.indexOf("charg") > -1 || t.indexOf("adapter") > -1 || t.indexOf("power") > -1) return "charger";
+    if (t.indexOf("cable") > -1 || t.indexOf("cord") > -1 || t.indexOf("wire") > -1) return "cable";
+    if (t.indexOf("case") > -1 || t.indexOf("cover") > -1) return "case";
+    if (t.indexOf("strap") > -1 || t.indexOf("stand") > -1 || t.indexOf("holder") > -1 || t.indexOf("mount") > -1 || t.indexOf("grip") > -1) return "strap";
+    return "box";
+  }
+
+  /* turns one Warehouse inventory item ({id,name,category,price,stock,desc})
+     into the shape the shop's product cards expect */
+  function toShopProduct(raw){
+    var stock = typeof raw.stock === "number" ? raw.stock : 0;
+    var tag = null;
+    if (stock <= 0) tag = "Out of Stock";
+    else if (stock <= 3) tag = "Low Stock";
+    return {
+      id: raw.id,
+      name: raw.name || "Untitled item",
+      cat: raw.category || "Accessories",
+      type: guessType(raw.category, raw.name),
+      price: raw.price || 0,
+      stock: stock,
+      tag: tag,
+      desc: (raw.desc && raw.desc.trim()) || ("Quality " + (raw.category || "accessory") + " pick from Sound Crave.")
+    };
+  }
+
+  /* ---------------- live catalog sync from the Warehouse ---------------- */
+  function applyShopCatalog(items){
+    if (!items || !items.length){
+      catalogHasRealItems = false;
+      PRODUCTS = FALLBACK_PRODUCTS;
+    } else {
+      catalogHasRealItems = true;
+      PRODUCTS = items.map(toShopProduct);
+    }
+    renderCategoryChips();
+    renderProducts();
+    renderCart();
+  }
+
+  function startShopCatalogSync(){
+    try {
+      var cached = localStorage.getItem("sc_wh_items");
+      if (cached){ applyShopCatalog(JSON.parse(cached)); }
+    } catch(e){}
+
+    window.firebaseReady.then(function(fb){
+      if (!fb) return;
+      try {
+        fb.onSnapshot(fb.collection(fb.db, "items"), function(qs){
+          var arr = [];
+          qs.forEach(function(d){ arr.push(Object.assign({ id: d.id }, d.data())); });
+          try { localStorage.setItem("sc_wh_items", JSON.stringify(arr)); } catch(e){}
+          applyShopCatalog(arr);
+        }, function(){ /* offline: keep whatever is already shown */ });
+      } catch(e){}
+    });
   }
 
   /* ---------------- state ---------------- */
@@ -797,33 +897,45 @@ window.firebaseReady = (async function () {
 
   /* ---------------- render: category chips ---------------- */
   var chipRow = document.getElementById("chipRow");
-  CATS.forEach(function(c){
-    var b = document.createElement("button");
-    b.className = "chip" + (c === state.category ? " active" : "");
-    b.textContent = c;
-    b.setAttribute("data-cat", c);
-    b.addEventListener("click", function(){
-      state.category = c;
-      document.querySelectorAll(".chip").forEach(function(el){ el.classList.remove("active"); });
-      b.classList.add("active");
-      renderProducts();
-    });
-    chipRow.appendChild(b);
-  });
 
-  document.querySelectorAll('[data-cat]').forEach(function(el){
-    if (el.tagName === "A"){
-      el.addEventListener("click", function(ev){
-        ev.preventDefault();
-        var c = el.getAttribute("data-cat");
+  function getCategoryList(){
+    if (!catalogHasRealItems) return DEMO_CATS;
+    var seen = {}; var list = ["All"];
+    PRODUCTS.forEach(function(p){
+      if (!seen[p.cat]){ seen[p.cat] = true; list.push(p.cat); }
+    });
+    return list;
+  }
+
+  function renderCategoryChips(){
+    var cats = getCategoryList();
+    if (cats.indexOf(state.category) === -1) state.category = "All";
+    chipRow.innerHTML = "";
+    cats.forEach(function(c){
+      var b = document.createElement("button");
+      b.className = "chip" + (c === state.category ? " active" : "");
+      b.textContent = c;
+      b.setAttribute("data-cat-chip", c);
+      b.addEventListener("click", function(){
         state.category = c;
-        document.querySelectorAll(".chip").forEach(function(chip){
-          chip.classList.toggle("active", chip.getAttribute("data-cat") === c);
-        });
+        chipRow.querySelectorAll(".chip").forEach(function(el){ el.classList.remove("active"); });
+        b.classList.add("active");
         renderProducts();
-        document.getElementById("shop").scrollIntoView({behavior:"smooth"});
       });
-    }
+      chipRow.appendChild(b);
+    });
+  }
+  renderCategoryChips();
+
+  document.querySelectorAll('a[data-cat]').forEach(function(el){
+    el.addEventListener("click", function(ev){
+      ev.preventDefault();
+      var c = el.getAttribute("data-cat");
+      state.category = getCategoryList().indexOf(c) > -1 ? c : "All";
+      renderCategoryChips();
+      renderProducts();
+      document.getElementById("shop").scrollIntoView({behavior:"smooth"});
+    });
   });
 
   /* ---------------- render: product grid ---------------- */
@@ -852,34 +964,41 @@ window.firebaseReady = (async function () {
     list.forEach(function(p){
       var card = document.createElement("div");
       card.className = "card";
-      var tagHtml = p.tag ? '<span class="tag">'+p.tag+'</span>' : "";
+      card.style.cursor = "pointer";
+      card.setAttribute("data-open", p.id);
+      var outOfStock = typeof p.stock === "number" && p.stock <= 0;
+      var tagHtml = p.tag ? '<span class="tag"' + (p.tag === "Out of Stock" ? ' style="background:rgba(255,91,57,.16); color:var(--accent);"' : '') + '>'+p.tag+'</span>' : "";
       var priceHtml = p.old ? '<span class="old">'+fmt(p.old)+'</span>'+fmt(p.price) : fmt(p.price);
       card.innerHTML =
         tagHtml +
-        '<div class="icon-wrap">'+icon(p.type)+'</div>' +
+        '<div class="icon-wrap" style="'+(outOfStock ? 'opacity:.45;' : '')+'">'+icon(p.type)+'</div>' +
         '<div class="cat">'+p.cat+'</div>' +
         '<h3>'+p.name+'</h3>' +
         '<p class="desc">'+p.desc+'</p>' +
         '<div class="row">' +
           '<div class="price">'+priceHtml+'</div>' +
           '<div class="card-btns">' +
-            '<button class="view-btn" data-view="'+p.id+'" aria-label="Quick view">' +
+            '<button class="view-btn" data-open="'+p.id+'" aria-label="View details">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>' +
             '</button>' +
-            '<button class="add-btn" data-add="'+p.id+'">Add</button>' +
+            (outOfStock
+              ? '<button class="add-btn" disabled style="opacity:.5; cursor:not-allowed;">Sold out</button>'
+              : '<button class="add-btn" data-add="'+p.id+'">Add</button>') +
           '</div>' +
         '</div>';
       grid.appendChild(card);
     });
 
     grid.querySelectorAll('[data-add]').forEach(function(btn){
-      btn.addEventListener("click", function(){
-        addToCart(parseInt(btn.getAttribute("data-add"), 10));
+      btn.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        addToCart(btn.getAttribute("data-add"));
       });
     });
-    grid.querySelectorAll('[data-view]').forEach(function(btn){
-      btn.addEventListener("click", function(){
-        openQuickView(parseInt(btn.getAttribute("data-view"), 10));
+    grid.querySelectorAll('[data-open]').forEach(function(el){
+      el.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        location.hash = "product/" + encodeURIComponent(el.getAttribute("data-open"));
       });
     });
   }
@@ -901,9 +1020,20 @@ window.firebaseReady = (async function () {
   wireSearch(document.getElementById("searchInputMobile"));
 
   /* ---------------- cart logic ---------------- */
+  function stockFor(id){
+    var p = PRODUCTS.find(function(x){ return x.id === id; });
+    return p && typeof p.stock === "number" ? p.stock : Infinity;
+  }
+
   function addToCart(id, qty){
     qty = qty || 1;
     var existing = state.cart.find(function(c){ return c.id === id; });
+    var currentQty = existing ? existing.qty : 0;
+    var max = stockFor(id);
+    if (currentQty + qty > max){
+      qty = max - currentQty;
+      if (qty <= 0){ showToast("No more left in stock"); return; }
+    }
     if (existing) existing.qty += qty;
     else state.cart.push({id:id, qty:qty});
     persistCart();
@@ -921,6 +1051,8 @@ window.firebaseReady = (async function () {
   function changeQty(id, delta){
     var item = state.cart.find(function(c){ return c.id === id; });
     if (!item) return;
+    var max = stockFor(id);
+    if (delta > 0 && item.qty + delta > max){ showToast("No more left in stock"); return; }
     item.qty += delta;
     if (item.qty <= 0) removeFromCart(id);
     else { persistCart(); renderCart(); }
@@ -967,13 +1099,13 @@ window.firebaseReady = (async function () {
     subtotalVal.textContent = fmt(subtotal);
 
     cartItemsEl.querySelectorAll('[data-inc]').forEach(function(b){
-      b.addEventListener("click", function(){ changeQty(parseInt(b.getAttribute("data-inc"),10), 1); });
+      b.addEventListener("click", function(){ changeQty(b.getAttribute("data-inc"), 1); });
     });
     cartItemsEl.querySelectorAll('[data-dec]').forEach(function(b){
-      b.addEventListener("click", function(){ changeQty(parseInt(b.getAttribute("data-dec"),10), -1); });
+      b.addEventListener("click", function(){ changeQty(b.getAttribute("data-dec"), -1); });
     });
     cartItemsEl.querySelectorAll('[data-remove]').forEach(function(b){
-      b.addEventListener("click", function(){ removeFromCart(parseInt(b.getAttribute("data-remove"),10)); });
+      b.addEventListener("click", function(){ removeFromCart(b.getAttribute("data-remove")); });
     });
   }
 
@@ -1001,37 +1133,47 @@ window.firebaseReady = (async function () {
   function openQuickView(id){
     var p = PRODUCTS.find(function(x){ return x.id === id; });
     if (!p) return;
+    var outOfStock = typeof p.stock === "number" && p.stock <= 0;
+    var max = typeof p.stock === "number" ? p.stock : Infinity;
     var qty = 1;
     var priceHtml = p.old ? '<span class="old">'+fmt(p.old)+'</span>'+fmt(p.price) : fmt(p.price);
+    var stockNote = typeof p.stock === "number" ? '<div style="font-size:12.5px; color:var(--text-muted); margin-top:-12px; margin-bottom:4px;">' + (outOfStock ? "Currently out of stock" : p.stock + " left in stock") + '</div>' : "";
     var body = document.getElementById("modalBody");
     body.innerHTML =
       '<button class="close-x" id="modalCloseX" aria-label="Close">' +
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
       '</button>' +
-      '<div class="icon-wrap">'+icon(p.type)+'</div>' +
+      '<div class="icon-wrap" style="'+(outOfStock ? 'opacity:.45;' : '')+'">'+icon(p.type)+'</div>' +
       '<div class="cat">'+p.cat+'</div>' +
       '<h3>'+p.name+'</h3>' +
       '<p class="desc">'+p.desc+'</p>' +
+      stockNote +
       '<span class="price">'+priceHtml+'</span>' +
       '<div class="modal-actions">' +
         '<div class="qty" style="margin-top:0;">' +
           '<button id="qDec">−</button><span id="qVal">1</span><button id="qInc">+</button>' +
         '</div>' +
-        '<button class="btn btn-primary" id="modalAdd" style="flex:1; justify-content:center;">Add to cart</button>' +
+        (outOfStock
+          ? '<button class="btn btn-ghost" style="flex:1; justify-content:center; opacity:.6; cursor:not-allowed;" disabled>Sold out</button>'
+          : '<button class="btn btn-primary" id="modalAdd" style="flex:1; justify-content:center;">Add to cart</button>') +
       '</div>';
 
     body.querySelector("#modalCloseX").addEventListener("click", closeModal);
     body.querySelector("#qInc").addEventListener("click", function(){
+      if (qty >= max){ showToast("No more left in stock"); return; }
       qty++; body.querySelector("#qVal").textContent = qty;
     });
     body.querySelector("#qDec").addEventListener("click", function(){
       if (qty > 1) qty--;
       body.querySelector("#qVal").textContent = qty;
     });
-    body.querySelector("#modalAdd").addEventListener("click", function(){
-      addToCart(p.id, qty);
-      closeModal();
-    });
+    var addBtn = body.querySelector("#modalAdd");
+    if (addBtn){
+      addBtn.addEventListener("click", function(){
+        addToCart(p.id, qty);
+        closeModal();
+      });
+    }
 
     modalWrap.classList.add("show");
     overlay.classList.add("show");
@@ -1045,10 +1187,20 @@ window.firebaseReady = (async function () {
   /* ---------------- checkout ---------------- */
   document.getElementById("checkoutBtn").addEventListener("click", function(){
     if (!state.cart.length) return;
-    var subtotal = state.cart.reduce(function(s,c){
+    var lines = state.cart.map(function(c){
       var p = PRODUCTS.find(function(x){ return x.id === c.id; });
-      return s + (p ? p.price * c.qty : 0);
-    }, 0);
+      return p ? { itemId: p.id, name: p.name, price: p.price, qty: c.qty } : null;
+    }).filter(Boolean);
+    var subtotal = lines.reduce(function(s,l){ return s + l.price * l.qty; }, 0);
+
+    if (catalogHasRealItems){
+      var order = { items: lines, total: subtotal, status: "new", createdAt: Date.now() };
+      window.firebaseReady.then(function(fb){
+        if (!fb) return;
+        try { fb.addDoc(fb.collection(fb.db, "orders"), order); } catch(e){}
+      });
+    }
+
     var body = document.getElementById("modalBody");
     body.innerHTML =
       '<button class="close-x" id="modalCloseX2" aria-label="Close">' +
@@ -1126,6 +1278,7 @@ window.firebaseReady = (async function () {
   /* ---------------- init ---------------- */
   renderProducts();
   renderCart();
+  startShopCatalogSync();
 })();
 </script>
 
@@ -1145,7 +1298,7 @@ window.firebaseReady = (async function () {
   }
 
   var AUTH_DOC = "warehouseAuth";
-  var wh = { items: [], bills: [], authed: false, fb: null, activeTab: "items", billLines: [] };
+  var wh = { items: [], bills: [], orders: [], authed: false, fb: null, activeTab: "items", billLines: [] };
 
   /* ---------------- routing ---------------- */
   function route(){
@@ -1162,6 +1315,7 @@ window.firebaseReady = (async function () {
     started = true;
     wh.items = lsGet("sc_wh_items", []);
     wh.bills = lsGet("sc_wh_bills", []);
+    wh.orders = lsGet("sc_wh_orders", []);
     initFirebaseAndAuth();
     wireStaticHandlers();
   }
@@ -1268,7 +1422,7 @@ window.firebaseReady = (async function () {
 
   /* ---------------- data sync ---------------- */
   function subscribeData(){
-    renderItems(); renderStats(); renderBillsList(); renderItemSelect();
+    renderItems(); renderStats(); renderBillsList(); renderItemSelect(); renderOrders();
     if (!wh.fb) return;
     try {
       wh.fb.onSnapshot(wh.fb.collection(wh.fb.db, "items"), function(qs){
@@ -1284,6 +1438,14 @@ window.firebaseReady = (async function () {
         arr.sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
         wh.bills = arr; lsSet("sc_wh_bills", arr);
         renderStats(); renderBillsList();
+      }, function(){});
+
+      wh.fb.onSnapshot(wh.fb.collection(wh.fb.db, "orders"), function(qs){
+        var arr = [];
+        qs.forEach(function(d){ arr.push(Object.assign({ id: d.id }, d.data())); });
+        arr.sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
+        wh.orders = arr; lsSet("sc_wh_orders", arr);
+        renderStats(); renderOrders();
       }, function(){});
     } catch(e){}
   }
@@ -1365,6 +1527,7 @@ window.firebaseReady = (async function () {
         document.getElementById("wiCat").value = it.category || "";
         document.getElementById("wiPrice").value = it.price || 0;
         document.getElementById("wiStock").value = it.stock || 0;
+        document.getElementById("wiDesc").value = it.desc || "";
         document.getElementById("wiEditId").value = it.id;
         document.getElementById("whItemForm").style.display = "block";
       });
@@ -1390,6 +1553,80 @@ window.firebaseReady = (async function () {
     document.getElementById("stItems").textContent = totalStock;
     document.getElementById("stValue").textContent = fmt(stockValue);
     document.getElementById("stRevenue").textContent = fmt(revenue);
+    document.getElementById("stOrders").textContent = wh.orders.length;
+  }
+
+  /* ---------------- render: incoming orders ---------------- */
+  function renderOrders(){
+    var list = document.getElementById("whOrdersList");
+    if (!wh.orders.length){
+      list.innerHTML = '<div class="cart-empty">No new orders right now.</div>';
+      return;
+    }
+    list.innerHTML = "";
+    wh.orders.forEach(function(o){
+      var d = o.createdAt ? new Date(o.createdAt) : null;
+      var dateStr = d ? d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "";
+      var linesStr = (o.items || []).map(function(l){ return l.qty + "× " + l.name; }).join(", ");
+      var row = document.createElement("div");
+      row.className = "wh-bill-row";
+      row.style.flexDirection = "column";
+      row.style.alignItems = "stretch";
+      row.innerHTML =
+        '<div style="display:flex; justify-content:space-between; width:100%;">' +
+          '<b>New online order</b>' +
+          '<b>' + fmt(o.total || 0) + '</b>' +
+        '</div>' +
+        '<div class="wh-bill-lines">' + escapeHtml(linesStr) + '</div>' +
+        '<div class="wh-bill-lines">' + dateStr + '</div>' +
+        '<div class="wh-actions" style="margin-top:10px;">' +
+          '<button data-fulfill="' + o.id + '" style="border-color:var(--signal); color:var(--signal);">Mark fulfilled</button>' +
+          '<button data-reject="' + o.id + '">Reject</button>' +
+        '</div>';
+      list.appendChild(row);
+    });
+    list.querySelectorAll("[data-fulfill]").forEach(function(b){
+      b.addEventListener("click", function(){ fulfillOrder(b.getAttribute("data-fulfill")); });
+    });
+    list.querySelectorAll("[data-reject]").forEach(function(b){
+      b.addEventListener("click", function(){
+        if (confirm("Reject and remove this order?")) deleteOrder(b.getAttribute("data-reject"));
+      });
+    });
+  }
+
+  async function fulfillOrder(orderId){
+    var order = wh.orders.find(function(o){ return o.id === orderId; });
+    if (!order) return;
+
+    // record it as a bill
+    var bill = { customer: "Online order", items: order.items, total: order.total, createdAt: Date.now() };
+    if (wh.fb){
+      try { var ref = await wh.fb.addDoc(wh.fb.collection(wh.fb.db, "bills"), bill); bill.id = ref.id; }
+      catch(e){ bill.id = "local_" + Date.now(); }
+    } else { bill.id = "local_" + Date.now(); }
+    wh.bills.unshift(bill);
+    lsSet("sc_wh_bills", wh.bills);
+
+    // decrement stock for each line
+    for (var i = 0; i < order.items.length; i++){
+      var line = order.items[i];
+      var item = wh.items.find(function(x){ return x.id === line.itemId; });
+      if (item){
+        item.stock = Math.max(0, (item.stock || 0) - line.qty);
+        await saveItem(item);
+      }
+    }
+
+    await deleteOrder(orderId);
+    renderStats(); renderBillsList();
+  }
+
+  async function deleteOrder(orderId){
+    if (wh.fb){ try { await wh.fb.deleteDoc(wh.fb.doc(wh.fb.db, "orders", orderId)); } catch(e){} }
+    wh.orders = wh.orders.filter(function(o){ return o.id !== orderId; });
+    lsSet("sc_wh_orders", wh.orders);
+    renderStats(); renderOrders();
   }
 
   /* ---------------- render: item select (new bill) ---------------- */
@@ -1475,7 +1712,7 @@ window.firebaseReady = (async function () {
         document.querySelectorAll('#whDash .chips .chip').forEach(function(c){ c.classList.remove("active"); });
         chip.classList.add("active");
         var tab = chip.getAttribute("data-tab");
-        ["items","newbill","bills"].forEach(function(t){
+        ["items","newbill","bills","orders"].forEach(function(t){
           document.getElementById("tab-" + t).style.display = (t === tab) ? "block" : "none";
         });
       });
@@ -1487,6 +1724,7 @@ window.firebaseReady = (async function () {
       document.getElementById("wiCat").value = "";
       document.getElementById("wiPrice").value = "";
       document.getElementById("wiStock").value = "";
+      document.getElementById("wiDesc").value = "";
       document.getElementById("whItemForm").style.display = "block";
     });
     document.getElementById("wiCancelBtn").addEventListener("click", function(){
@@ -1500,7 +1738,8 @@ window.firebaseReady = (async function () {
         name: name,
         category: document.getElementById("wiCat").value.trim(),
         price: parseFloat(document.getElementById("wiPrice").value) || 0,
-        stock: parseInt(document.getElementById("wiStock").value, 10) || 0
+        stock: parseInt(document.getElementById("wiStock").value, 10) || 0,
+        desc: document.getElementById("wiDesc").value.trim()
       };
       if (!item.id) delete item.id;
       saveItem(item);
