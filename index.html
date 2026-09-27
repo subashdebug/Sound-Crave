@@ -81,6 +81,12 @@
   .search-box input{
     background:none; border:none; outline:none; color:var(--text); font-size:14px; width:100%;
   }
+  .nav-actions .search-box, .mobile-panel .search-box{
+    height:40px; box-sizing:border-box; padding:0 14px;
+  }
+  .nav-actions .search-box input, .mobile-panel .search-box input{
+    height:100%; line-height:normal; padding:0; margin:0; -webkit-appearance:none; appearance:none;
+  }
   .search-box input::placeholder{color:var(--text-muted);}
   .search-box svg{flex:none; opacity:.6;}
   .icon-btn{
@@ -423,7 +429,6 @@
     <div class="logo"><span class="dot"></span>Sound Crave</div>
     <nav class="links">
       <a href="#shop">Shop</a>
-      <a href="#why">Why Us</a>
       <a href="#reviews">Reviews</a>
       <a href="#contact">Contact</a>
     </nav>
@@ -443,7 +448,6 @@
   </div>
   <div class="mobile-panel" id="mobilePanel">
     <a href="#shop">Shop</a>
-    <a href="#why">Why Us</a>
     <a href="#reviews">Reviews</a>
     <a href="#contact">Contact</a>
     <div class="search-box">
@@ -464,7 +468,7 @@
           <a href="#shop" class="btn btn-primary">
             Shop the collection
           </a>
-          <a href="#why" class="btn btn-ghost">Why Sound Crave</a>
+          <a href="#reviews" class="btn btn-ghost">Customer Reviews</a>
         </div>
       </div>
       <div class="eq-panel" id="heroPanel">
@@ -516,34 +520,6 @@
         </select>
       </div>
       <div class="grid" id="productGrid"></div>
-    </div>
-  </section>
-
-  <section class="section" id="why" style="padding-top:0;">
-    <div class="wrap">
-      <div class="section-head">
-        <div>
-          <h2>Built around real daily use</h2>
-          <p>We test every product the way you'll actually use it — commute, gym, calls, gaming.</p>
-        </div>
-      </div>
-      <div class="why-grid">
-        <div class="why-card">
-          <b class="num">28h</b>
-          <h3>Battery that lasts</h3>
-          <p>Every earbud and headphone in our lineup clears a full day of use before it needs a case charge.</p>
-        </div>
-        <div class="why-card">
-          <b class="num">IPX5</b>
-          <h3>Sweat & splash resistant</h3>
-          <p>Rated for workouts, rain and everyday drops — not just the showroom shelf.</p>
-        </div>
-        <div class="why-card">
-          <b class="num">10k+</b>
-          <h3>Charge cycles tested</h3>
-          <p>Cables and chargers are bend-tested thousands of times before they ever reach your cart.</p>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -1135,10 +1111,15 @@ window.firebaseReady = (async function () {
 
   function wireSearch(input){
     input.addEventListener("input", function(e){
+      var wasEmpty = state.search === "";
       state.search = e.target.value;
       var other = input.id === "searchInput" ? document.getElementById("searchInputMobile") : document.getElementById("searchInput");
       if (other) other.value = e.target.value;
       renderProducts();
+      if (wasEmpty && state.search !== ""){
+        document.getElementById("shop").scrollIntoView({ behavior: "smooth", block: "start" });
+        document.getElementById("mobilePanel").classList.remove("show");
+      }
     });
   }
   wireSearch(document.getElementById("searchInput"));
