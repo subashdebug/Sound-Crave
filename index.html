@@ -1293,6 +1293,23 @@ window.firebaseReady = (async function () {
   }
 
   /* ---------------- checkout ---------------- */
+  /* ---------------- order email notification (Resend, via a Cloudflare Worker) ----------------
+     The worker keeps the Resend API key private. See sound-crave-order-email-worker.js for the
+     worker's code and setup steps. Replace ORDER_EMAIL_WORKER_URL with your deployed worker's URL. */
+  var ORDER_EMAIL_WORKER_URL = "https://sound-crave-order-email.talrejasubhash23.workers.dev";
+  var ORDER_EMAIL_SHARED_SECRET = "ecba2675ac0a648f15a91dacf3aa1eda";
+
+  function sendOrderEmail(orderId, order){
+    if (!ORDER_EMAIL_WORKER_URL || ORDER_EMAIL_WORKER_URL.indexOf("YOUR-SUBDOMAIN") > -1) return;
+    try {
+      fetch(ORDER_EMAIL_WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Shared-Secret": ORDER_EMAIL_SHARED_SECRET },
+        body: JSON.stringify({ orderId: orderId, order: order })
+      }).catch(function(e){ console.warn("Order email failed to send:", e); });
+    } catch(e){ console.warn("Order email failed to send:", e); }
+  }
+
   document.getElementById("checkoutBtn").addEventListener("click", function(){
     if (!state.cart.length) return;
     var lines = state.cart.map(function(c){
@@ -1301,33 +1318,64 @@ window.firebaseReady = (async function () {
     }).filter(Boolean);
     var subtotal = lines.reduce(function(s,l){ return s + l.price * l.qty; }, 0);
 
-    if (catalogHasRealItems){
-      var order = { items: lines, total: subtotal, status: "new", createdAt: Date.now() };
-      window.firebaseReady.then(function(fb){
-        if (!fb) return;
-        try { fb.addDoc(fb.collection(fb.db, "orders"), order); } catch(e){}
-      });
-    }
-
     var body = document.getElementById("modalBody");
     body.innerHTML =
       '<button class="close-x" id="modalCloseX2" aria-label="Close">' +
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
       '</button>' +
-      '<div class="success">' +
-        '<div class="check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></div>' +
-        '<h3>Order placed</h3>' +
-        '<p>Your order of '+fmt(subtotal)+' has been received. This is a demo checkout, so no payment was actually taken.</p>' +
-        '<button class="btn btn-primary" id="doneBtn" style="width:100%; justify-content:center;">Continue shopping</button>' +
-      '</div>';
+      '<h3 style="margin-bottom:6px;">Your details</h3>' +
+      '<p style="color:var(--text-muted); font-size:13.5px; margin-bottom:18px;">So we can confirm and deliver your order of '+fmt(subtotal)+'.</p>' +
+      '<input id="coName" class="search-box" style="width:100%; padding:12px 14px; margin-bottom:12px;" placeholder="Your name">' +
+      '<input id="coPhone" class="search-box" style="width:100%; padding:12px 14px; margin-bottom:6px;" placeholder="Phone / WhatsApp number">' +
+      '<div id="coMsg" style="font-size:13px; color:var(--accent); min-height:16px; margin-bottom:10px;"></div>' +
+      '<button class="btn btn-primary" id="coSubmit" style="width:100%; justify-content:center;">Place order</button>';
+
     body.querySelector("#modalCloseX2").addEventListener("click", closeModal);
-    body.querySelector("#doneBtn").addEventListener("click", function(){
-      state.cart = [];
-      persistCart();
-      renderCart();
-      closeModal();
-      closeDrawer();
+    body.querySelector("#coSubmit").addEventListener("click", function(){
+      var name = document.getElementById("coName").value.trim();
+      var phone = document.getElementById("coPhone").value.trim();
+      if (!name || !phone){
+        document.getElementById("coMsg").textContent = "Please enter your name and phone number.";
+        return;
+      }
+
+      var order = { items: lines, total: subtotal, status: "new", createdAt: Date.now(), customer: { name: name, phone: phone } };
+      var orderId = null;
+
+      if (catalogHasRealItems){
+        window.firebaseReady.then(function(fb){
+          if (!fb) return;
+          try {
+            fb.addDoc(fb.collection(fb.db, "orders"), order).then(function(ref){
+              orderId = ref.id;
+              sendOrderEmail(orderId, order);
+            });
+          } catch(e){ sendOrderEmail(null, order); }
+        });
+      } else {
+        sendOrderEmail(null, order);
+      }
+
+      body.innerHTML =
+        '<button class="close-x" id="modalCloseX3" aria-label="Close">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+        '</button>' +
+        '<div class="success">' +
+          '<div class="check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></div>' +
+          '<h3>Order placed</h3>' +
+          '<p>Thanks, '+name+'! Your order of '+fmt(subtotal)+' has been received — we\'ll reach out on '+phone+' to confirm.</p>' +
+          '<button class="btn btn-primary" id="doneBtn" style="width:100%; justify-content:center;">Continue shopping</button>' +
+        '</div>';
+      body.querySelector("#modalCloseX3").addEventListener("click", closeModal);
+      body.querySelector("#doneBtn").addEventListener("click", function(){
+        state.cart = [];
+        persistCart();
+        renderCart();
+        closeModal();
+        closeDrawer();
+      });
     });
+
     modalWrap.classList.add("show");
     overlay.classList.add("show");
   });
@@ -1837,13 +1885,15 @@ window.firebaseReady = (async function () {
       var d = o.createdAt ? new Date(o.createdAt) : null;
       var dateStr = d ? d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "";
       var linesStr = (o.items || []).map(function(l){ return l.qty + "× " + l.name; }).join(", ");
+      var customer = o.customer || {};
+      var custStr = customer.name ? (escapeHtml(customer.name) + (customer.phone ? " · " + escapeHtml(customer.phone) : "")) : "New online order";
       var row = document.createElement("div");
       row.className = "wh-bill-row";
       row.style.flexDirection = "column";
       row.style.alignItems = "stretch";
       row.innerHTML =
         '<div style="display:flex; justify-content:space-between; width:100%;">' +
-          '<b>New online order</b>' +
+          '<b>' + custStr + '</b>' +
           '<b>' + fmt(o.total || 0) + '</b>' +
         '</div>' +
         '<div class="wh-bill-lines">' + escapeHtml(linesStr) + '</div>' +
@@ -1869,7 +1919,8 @@ window.firebaseReady = (async function () {
     if (!order) return;
 
     // record it as a bill
-    var bill = { customer: "Online order", items: order.items, total: order.total, createdAt: Date.now() };
+    var custLabel = (order.customer && order.customer.name) ? order.customer.name + (order.customer.phone ? " (" + order.customer.phone + ")" : "") : "Online order";
+    var bill = { customer: custLabel, items: order.items, total: order.total, createdAt: Date.now() };
     if (wh.fb){
       try { var ref = await wh.fb.addDoc(wh.fb.collection(wh.fb.db, "bills"), bill); bill.id = ref.id; }
       catch(e){ bill.id = "local_" + Date.now(); }
